@@ -1,8 +1,8 @@
 /**
  * 席替えアプリ（Google Apps Script）
- * スプレッドシートに紐付けず Script Properties に保存する単体Webアプリです。
+ * 各利用者のGoogleドライブ内に専用スプレッドシートを自動作成して保存します。
  */
-const STORE_KEY = 'seatChangeAppData_v1';
+const DB_ID_KEY = 'seatChangeDatabaseId_v1';
 
 function doGet() {
   return HtmlService.createHtmlOutputFromFile('Index')
@@ -11,17 +11,40 @@ function doGet() {
 }
 
 function getAppData() {
-  const raw = PropertiesService.getScriptProperties().getProperty(STORE_KEY);
+  const sheet = getDatabase_().getSheetByName('データ');
+  const raw = sheet.getRange('B2').getValue();
   return raw ? JSON.parse(raw) : {
     config: { rows: 4, cols: 7, frontRows: 2 },
-    students: [], pairs: { together: [], apart: [] }, previous: [], archives: [], savedAt: null
+    students: [], pairs: { together: [], apart: [] }, temporaryPairs: { together: [], apart: [] }, previous: [], archives: [], savedAt: null
   };
 }
 
 function saveAppData(data) {
   validateData_(data);
-  PropertiesService.getScriptProperties().setProperty(STORE_KEY, JSON.stringify(data));
+  data.savedAt = new Date().toISOString();
+  const sheet = getDatabase_().getSheetByName('データ');
+  sheet.getRange('A1:B2').setValues([['項目', 'データ'], ['appData', JSON.stringify(data)]]);
   return getAppData();
+}
+
+function getDatabaseInfo() {
+  const db = getDatabase_();
+  return { name: db.getName(), url: db.getUrl() };
+}
+
+function getDatabase_() {
+  const props = PropertiesService.getUserProperties();
+  const savedId = props.getProperty(DB_ID_KEY);
+  if (savedId) {
+    try { return SpreadsheetApp.openById(savedId); } catch (e) { props.deleteProperty(DB_ID_KEY); }
+  }
+  const db = SpreadsheetApp.create('席替えアプリ データ');
+  const sheet = db.getActiveSheet().setName('データ');
+  sheet.getRange('A1:B2').setValues([['項目', 'データ'], ['appData', '']]);
+  sheet.setFrozenRows(1);
+  sheet.setColumnWidths(1, 2, 260);
+  props.setProperty(DB_ID_KEY, db.getId());
+  return db;
 }
 
 function validateData_(data) {
@@ -65,8 +88,8 @@ function createBestLayout_(data, tries) {
   const previous = data.previous || [];
   const prevMap = {};
   previous.forEach((name, index) => { if (name) prevMap[name] = index; });
-  const together = data.pairs.together || [];
-  const apart = data.pairs.apart || [];
+  const together = (data.pairs.together || []).concat((data.temporaryPairs && data.temporaryPairs.together) || []);
+  const apart = (data.pairs.apart || []).concat((data.temporaryPairs && data.temporaryPairs.apart) || []);
   let best = null;
 
   for (let t = 0; t < tries; t++) {

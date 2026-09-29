@@ -14,7 +14,7 @@ function getAppData() {
   const raw = PropertiesService.getScriptProperties().getProperty(STORE_KEY);
   return raw ? JSON.parse(raw) : {
     config: { rows: 4, cols: 7, frontRows: 2 },
-    students: [], pairs: { together: [], apart: [] }, previous: [], savedAt: null
+    students: [], pairs: { together: [], apart: [] }, previous: [], archives: [], savedAt: null
   };
 }
 
@@ -38,6 +38,7 @@ function validateData_(data) {
 
 function generateSeating(data, count) {
   validateData_(data);
+  // 画面からは {name, front} 形式で受け取り、以降は名前だけを使います。
   data = JSON.parse(JSON.stringify(data));
   data.frontStudents = (data.students || []).filter(s => typeof s === 'object' && s.front).map(s => s.name);
   data.students = (data.students || []).map(s => typeof s === 'string' ? s : s.name);
